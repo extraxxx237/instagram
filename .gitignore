@@ -1,0 +1,12 @@
+.env
+data/session.json
+data/scraped_posts.json
+data/analysis.json
+data/generated_posts.json
+data/posted_log.json
+data/placeholder.jpg
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
