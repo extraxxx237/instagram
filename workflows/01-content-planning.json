@@ -1,0 +1,152 @@
+{
+  "name": "Norivagrowbags - Content Planning",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [1],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Weekly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $credentials.tavilyApi.apiKey, query: \"aktuelle Garten Trends Pflanzsäcke Growbags Urban Gardening Tipps\", search_depth: \"advanced\", max_results: 8, include_answer: true }) }}",
+        "options": {}
+      },
+      "id": "tavily-search",
+      "name": "Trend & Themen-Recherche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-980, 0],
+      "notes": "Reine Themen-/Fakten-Recherche. Es werden keine Bild- oder Textinhalte Dritter übernommen, nur Stichpunkte als Inspiration für eigene Captions."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "docs/strategy.md",
+        "options": {}
+      },
+      "id": "read-strategy",
+      "name": "Strategie-Kontext laden",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [-980, 200],
+      "notes": "Alternativ: Inhalt von docs/strategy.md direkt als Text in einen Set-Node kopieren, falls n8n keinen Dateizugriff auf dieses Repo hat."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-sonnet-4-6\", max_tokens: 2000, messages: [{ role: \"user\", content: \"Du bist Social-Media-Stratege für den Instagram-Kanal @norivagrowbags (Vließsäcke/Pflanzsäcke, Garten-Tipps). Markenkontext:\\n\" + $node['Strategie-Kontext laden'].json['data'] + \"\\n\\nAktuelle Recherche-Stichpunkte (nur als Themen-Inspiration, NICHT wörtlich übernehmen, keine fremden Bilder/Texte kopieren):\\n\" + JSON.stringify($node['Trend & Themen-Recherche'].json.results) + \"\\n\\nErstelle 3 vollständig eigenständige Post-Konzepte als JSON-Array. Jedes Objekt: { pillar, hook, caption, hashtags (Array, max 15), bildidee (Beschreibung für ein eigenes Foto/eine eigene Grafik), format (Karussell|Reel|Einzelbild), begruendung_relevanz }. Antworte NUR mit dem JSON-Array, keine Erklärung.\" }] }) }}",
+        "options": {}
+      },
+      "id": "claude-content",
+      "name": "Content-Konzepte erstellen (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-760, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.first().json.content[0].text;\nconst ideas = JSON.parse(text);\nconst today = new Date().toISOString().slice(0,10);\nreturn ideas.map(idea => ({ json: { ...idea, datum_erstellt: today, status: 'Entwurf' } }));"
+      },
+      "id": "parse-ideas",
+      "name": "Entwürfe parsen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-540, 100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "value": "PUT_GOOGLE_SHEET_ID_HERE" },
+        "sheetName": { "mode": "name", "value": "Redaktionsplan" },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {}
+      },
+      "id": "google-sheets-append",
+      "name": "In Redaktionsplan speichern",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-320, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst lines = items.map((it, i) => `*${i+1}. ${it.json.pillar} (${it.json.format})*\\nHook: ${it.json.hook}\\nCaption: ${it.json.caption.slice(0,200)}...\\nBildidee: ${it.json.bildidee}\\n`).join('\\n');\nreturn [{ json: { text: `Neue Post-Entwürfe für @norivagrowbags zur Freigabe:\\n\\n${lines}\\n\\nBitte im Redaktionsplan-Sheet Status auf 'Freigegeben' setzen oder Text anpassen.` } }];"
+      },
+      "id": "format-telegram-message",
+      "name": "Freigabe-Nachricht formatieren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, 100]
+    },
+    {
+      "parameters": {
+        "chatId": "PUT_TELEGRAM_CHAT_ID_HERE",
+        "text": "={{ $json.text }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-notify",
+      "name": "Freigabe per Telegram anfordern",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [120, 100]
+    }
+  ],
+  "connections": {
+    "Weekly Trigger": {
+      "main": [
+        [
+          { "node": "Trend & Themen-Recherche", "type": "main", "index": 0 },
+          { "node": "Strategie-Kontext laden", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Trend & Themen-Recherche": {
+      "main": [[{ "node": "Content-Konzepte erstellen (Claude)", "type": "main", "index": 0 }]]
+    },
+    "Strategie-Kontext laden": {
+      "main": [[{ "node": "Content-Konzepte erstellen (Claude)", "type": "main", "index": 0 }]]
+    },
+    "Content-Konzepte erstellen (Claude)": {
+      "main": [[{ "node": "Entwürfe parsen", "type": "main", "index": 0 }]]
+    },
+    "Entwürfe parsen": {
+      "main": [[{ "node": "In Redaktionsplan speichern", "type": "main", "index": 0 }]]
+    },
+    "In Redaktionsplan speichern": {
+      "main": [[{ "node": "Freigabe-Nachricht formatieren", "type": "main", "index": 0 }]]
+    },
+    "Freigabe-Nachricht formatieren": {
+      "main": [[{ "node": "Freigabe per Telegram anfordern", "type": "main", "index": 0 }]]
+    }
+  }
+}
