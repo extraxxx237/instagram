@@ -10,6 +10,8 @@ Usage:
     python workflow.py status       Show pipeline status
     python workflow.py run          Run full automated loop (scheduler)
     python workflow.py once         Run one full cycle: scrape->analyze->generate->post
+    python workflow.py references   Download viral post thumbnails for moodboard reference
+    python workflow.py dashboard    Launch web dashboard to review/approve posts
 """
 
 import json
@@ -102,6 +104,18 @@ def cmd_run():
     scheduler.run()
 
 
+def cmd_references():
+    import reference_images
+    paths = reference_images.run()
+    print(f"\n✅  Downloaded {len(paths)} reference thumbnails (moodboard only, not for reposting).")
+
+
+def cmd_dashboard():
+    import dashboard
+    print("\n🌱  Dashboard running at http://localhost:5000")
+    dashboard.run()
+
+
 COMMANDS = {
     "scrape": cmd_scrape,
     "analyze": cmd_analyze,
@@ -109,6 +123,8 @@ COMMANDS = {
     "status": cmd_status,
     "once": cmd_once,
     "run": cmd_run,
+    "references": cmd_references,
+    "dashboard": cmd_dashboard,
 }
 
 

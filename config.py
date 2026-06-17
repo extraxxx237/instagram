@@ -29,4 +29,14 @@ GENERATED_FILE = os.path.join(DATA_DIR, "generated_posts.json")
 POSTED_LOG_FILE = os.path.join(DATA_DIR, "posted_log.json")
 SESSION_FILE = os.path.join(DATA_DIR, "session.json")
 
+# Reference-only thumbnails of viral posts (moodboard, never re-posted verbatim
+# for copyright reasons). Drop your own photos in OWN_IMAGES_DIR to use them
+# as the actual post image.
+REFERENCE_IMAGES_DIR = os.path.join(DATA_DIR, "reference_images")
+OWN_IMAGES_DIR = os.path.join(DATA_DIR, "own_images")
+
+DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "5000"))
+
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(REFERENCE_IMAGES_DIR, exist_ok=True)
+os.makedirs(OWN_IMAGES_DIR, exist_ok=True)

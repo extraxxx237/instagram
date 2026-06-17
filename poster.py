@@ -19,17 +19,37 @@ from config import (
     POSTED_LOG_FILE,
     SESSION_FILE,
     DATA_DIR,
+    OWN_IMAGES_DIR,
 )
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 PLACEHOLDER_IMG = os.path.join(DATA_DIR, "placeholder.jpg")
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 
 def build_client() -> Client:
     from scraper import build_client as _build
     return _build()
+
+
+def _next_own_image() -> str | None:
+    """Returns the oldest unused image from OWN_IMAGES_DIR, if any."""
+    candidates = sorted(
+        f for f in os.listdir(OWN_IMAGES_DIR)
+        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
+    )
+    if not candidates:
+        return None
+    return os.path.join(OWN_IMAGES_DIR, candidates[0])
+
+
+def _archive_own_image(path: str):
+    """Moves a used own-image into a 'used' subfolder so it isn't reposted."""
+    used_dir = os.path.join(OWN_IMAGES_DIR, "used")
+    os.makedirs(used_dir, exist_ok=True)
+    os.rename(path, os.path.join(used_dir, os.path.basename(path)))
 
 
 def _create_placeholder_image(caption_snippet: str) -> str:
@@ -104,10 +124,14 @@ def post_to_instagram(image_path: str | None = None) -> bool:
         return False
 
     caption = post["caption"]
-    img_path = image_path or _create_placeholder_image(caption)
+    own_image = None
+    if not image_path:
+        own_image = _next_own_image()
+    img_path = image_path or own_image or _create_placeholder_image(caption)
 
     log.info("Posting caption (id=%s)...", post["id"])
     log.info("Caption preview: %s...", caption[:100])
+    log.info("Image source: %s", "own photo" if own_image else ("custom path" if image_path else "generated placeholder"))
 
     cl = build_client()
     media_id = None
@@ -128,6 +152,8 @@ def post_to_instagram(image_path: str | None = None) -> bool:
                 return False
 
     mark_as_posted(post["id"], media_id)
+    if own_image and media_id:
+        _archive_own_image(own_image)
     return True
 
 
